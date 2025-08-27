@@ -1,34 +1,39 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import openai
 import os
 
-# Initialize FastAPI
-app = FastAPI()
-
-# Load OpenAI API key from environment
+# Load API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Request body model
+app = FastAPI()
+
+# ✅ Allow frontend to connect (Netlify + local dev)
+origins = [
+    "http://localhost:5500",   # if testing locally
+    "https://jade-selkie-2bfdf0.netlify.app",  # replace with your Netlify domain
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 class Message(BaseModel):
     text: str
 
-# ✅ Root route (so Render URL shows something instead of "Not Found")
-@app.get("/")
-async def root():
-    return {"message": "Server is running!"}
-
-# ✅ Chatbot route
 @app.post("/chat")
 async def chat(message: Message):
     try:
-        client = openai.OpenAI(api_key=openai.api_key)
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": message.text}]
         )
-        reply = response.choices[0].message.content
+        reply = response["choices"][0]["message"]["content"]
         return {"reply": reply}
-
     except Exception as e:
         return {"error": str(e)}
