@@ -1,39 +1,48 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import openai
 import os
+import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-app = FastAPI()
+app = Flask(__name__)
+CORS(app)
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Make sure you add OPENROUTER_API_KEY in Render environment variables
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# ✅ Allow all origins for now (quick test)
-# Later, replace ["*"] with your Netlify URL for security
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-class Message(BaseModel):
-    text: str
-
-@app.get("/")
-async def root():
-    return {"message": "Server is running!"}
-
-@app.post("/chat")
-async def chat(message: Message):
+@app.route("/chat", methods=["POST"])
+def chat():
     try:
-        client = openai.OpenAI(api_key=openai.api_key)
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": message.text}]
+        user_message = request.json.get("message")
+
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": "mistralai/mistral-7b-instruct",  # free, good quality
+            "messages": [
+                {"role": "user", "content": user_message}
+            ]
+        }
+
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=data
         )
-        reply = response.choices[0].message.content
-        return {"reply": reply}
+
+        if response.status_code != 200:
+            return jsonify({"error": f"Error {response.status_code}: {response.text}"}), 500
+
+        result = response.json()
+        reply = result["choices"][0]["message"]["content"]
+
+        return jsonify({"reply": reply})
+
     except Exception as e:
-        return {"error": str(e)}
+        return jsonify({"error": str(e)}), 500
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
