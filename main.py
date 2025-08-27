@@ -4,20 +4,15 @@ from pydantic import BaseModel
 import openai
 import os
 
-# Load API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
 app = FastAPI()
 
-# ✅ Allow frontend to connect (Netlify + local dev)
-origins = [
-    "http://localhost:5500",   # if testing locally
-    "https://jade-selkie-2bfdf0.netlify.app",  # replace with your Netlify domain
-]
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# ✅ Allow all origins for now (quick test)
+# Later, replace ["*"] with your Netlify URL for security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,14 +21,19 @@ app.add_middleware(
 class Message(BaseModel):
     text: str
 
+@app.get("/")
+async def root():
+    return {"message": "Server is running!"}
+
 @app.post("/chat")
 async def chat(message: Message):
     try:
-        response = openai.ChatCompletion.create(
+        client = openai.OpenAI(api_key=openai.api_key)
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": message.text}]
         )
-        reply = response["choices"][0]["message"]["content"]
+        reply = response.choices[0].message.content
         return {"reply": reply}
     except Exception as e:
         return {"error": str(e)}
